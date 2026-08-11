@@ -1,10 +1,7 @@
-id=abootloop
-name=Anti bootloop
-version=v1.3.4
-versionCode=8
-author=nedorazrab0
-description=Bootloop protection
-updateJson=https://raw.githubusercontent.com/Magisk-Modules-Alt-Repo/abootloop/main/update.json
-
-zipUrl=https://github.com/Magisk-Modules-Alt-Repo/abootloop/releases/download/v1.3.4/abootloop.zip
-changelog=https://raw.githubusercontent.com/Magisk-Modules-Alt-Repo/abootloop/main/changelog.md
+id=deadhand
+name=deadhand (panic wipe)
+version=v0.1.0
+versionCode=1
+author=VD171 (fork de nedorazrab0/abootloop)
+description=[!] CATASTROFICO E IRREVERSIVEL. 4x no botao Power (rapido) apaga o aparelho: crypto-shred das chaves FBE + factory reset. Nasce DESARMADO e em DRY_RUN (so simula). Botao Action = armar/desarmar. LEIA O README ANTES.
+updateJson=https://raw.githubusercontent.com/VD171/deadhand/main/update.json

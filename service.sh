@@ -1,8 +1,10 @@
+#!/system/bin/sh
+# deadhand - inicia o daemon de panico no boot (late_start service).
 MODDIR="${0%/*}"
 . "${MODDIR}/common/functions.sh"
 
-# Wait for the key press until the system boot is comleted
-# check every second 
-until [[ "$(resetprop sys.boot_completed)" == 1 ]]; do
-  press_check 1 && disable_modules
-done
+ensure_state
+
+# Sobe o daemon destacado. O daemon so DISPARA se ARMED=1 no config;
+# instalado desarmado e em DRY_RUN, entao subir aqui e' seguro.
+( run_daemon ) &

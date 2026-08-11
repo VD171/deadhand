@@ -1,91 +1,58 @@
-cfgpath="${MODPATH}/common/cfg.sh"
-powkey='KEY_POWER'
-volupkey='KEY_VOLUMEUP'
-voldownkey='KEY_VOLUMEDOWN'
-keylist="${powkey} ${volupkey} ${voldownkey}"
+# deadhand - instalacao. Nao pede nada; instala DESARMADO e em DRY_RUN.
+SKIPUNZIP=0
 
-detect_keys() {
-  local event
-  while true; do
-    event="$(getevent -lqn -c1)"
-    # `KEY.*DOWN` means that the key was pressed, not released
-    if echo "${event}" | grep -q "${volupkey}.*DOWN"; then
-      echo 'volup' && break
-    elif echo "${event}" | grep -q "${voldownkey}.*DOWN"; then
-      echo 'voldown' && break
-    fi
-  done
-}
+ui_print ""
+ui_print "  ###############################################"
+ui_print "  #                                             #"
+ui_print "  #            d e a d h a n d                  #"
+ui_print "  #        panic wipe / dead-man switch         #"
+ui_print "  #                                             #"
+ui_print "  ###############################################"
+ui_print ""
+ui_print "  [!] ATENCAO - LEIA COM CUIDADO"
+ui_print ""
+ui_print "  Este modulo APAGA O APARELHO quando o botao"
+ui_print "  Power e' pressionado 4x rapidamente."
+ui_print ""
+ui_print "  O resultado e' CATASTROFICO e IRREVERSIVEL:"
+ui_print "  crypto-shred das chaves + factory reset."
+ui_print "  NAO ha desfazer. NAO ha recuperacao."
+ui_print ""
+ui_print "  Por seguranca ele nasce:"
+ui_print "    - DESARMADO (ARMED=0): 4x Power nao faz nada"
+ui_print "    - em SIMULACAO (DRY_RUN=1): so escreve no log"
+ui_print ""
+ui_print "  Para usar de verdade voce precisa, de proposito:"
+ui_print "    1) Armar (botao Action no gerenciador)"
+ui_print "    2) Testar em DRY_RUN e conferir o log"
+ui_print "    3) So entao por DRY_RUN=0 no config"
+ui_print ""
+ui_print "  Config: /data/adb/deadhand/config"
+ui_print "  Log:    /data/adb/deadhand/deadhand.log"
+ui_print ""
+ui_print "  Faca BACKUP do que importa ANTES de armar."
+ui_print ""
 
-mkcfg() {
-  local count
-  local key
-  count="${1}"
-  key="${2}"
+# Cria estado/config padrao (desarmado + dry-run).
+mkdir -p /data/adb/deadhand 2>/dev/null
+chmod 700 /data/adb/deadhand 2>/dev/null
+if [ ! -f /data/adb/deadhand/config ]; then
+  cat > /data/adb/deadhand/config <<'EOF'
+ARMED=0
+DRY_RUN=1
+WINDOW_MS=1500
+DEBOUNCE_MS=120
+ABORT_SECONDS=5
+WIPE_REASON=deadhand
+EOF
+  chmod 600 /data/adb/deadhand/config 2>/dev/null
+fi
 
-  echo "key${count}=${key}" >> "${cfgpath}"
-  ui_print ">> ${key} is selected!"
-  ui_print
-}
+set_perm_recursive "${MODPATH}" 0 0 0755 0644
+set_perm "${MODPATH}/service.sh"      0 0 0755
+set_perm "${MODPATH}/post-fs-data.sh" 0 0 0755
+set_perm "${MODPATH}/action.sh"       0 0 0755
+set_perm "${MODPATH}/common/functions.sh" 0 0 0755
 
-upd_complete_var() {
-  echo "Complete the installation with ${1} keys selected"
-}
-
-interactive() {
-  local pressed_key
-  local complete
-  local choice
-  local count
-
-  ui_print '**** Customizing ****'
-  ui_print
-  ui_print '- Use VOL+ to confirm your choice'
-  ui_print '  and VOL- to select next option!'
-  ui_print
-  sleep 1
-
-  count=0
-  complete="$(upd_complete_var ${count})"
-  
-  while true; do
-    for choice in ${keylist} "${complete}"; do
-      ui_print "> ${choice}"
-      pressed_key="$(detect_keys)"
-      case "${pressed_key}" in
-        volup) break;;
-        voldown) continue;;  # Continue the loop if VOL- has been pressed
-      esac
-    done
-
-    if [[ "${pressed_key}" == 'volup' ]]; then
-      if [[ "${choice%_*}" == 'KEY' ]]; then
-        # Add a new key to the conf
-        count="$((count + 1))" 
-        mkcfg "${count}" "${choice}"
-        [[ "${count}" == 2 ]] && break  # Do not add more than 2 keys
-        complete="$(upd_complete_var ${count})"
-      else
-        break  # Complete the installation manually
-      fi
-    fi
-  done
-}
-
-fallback() {
-  ui_print '- It looks like your device does'
-  ui_print '  not have volume buttons'
-  ui_print '- Use the power key to trigger the module!'
-  mkcfg 1 "${powkey}"
-}
-
-main() {
-  command -v getevent > /dev/null || abort '! `getevent` command missing'
-  if getevent -il | grep -q 'KEY_VOLUME.'; then
-    interactive
-  else
-    fallback
-  fi
-}
-
-main
+ui_print "  Instalado DESARMADO. Reinicie para carregar o daemon."
+ui_print ""
