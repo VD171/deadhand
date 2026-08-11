@@ -1,142 +1,142 @@
 # deadhand
 
-> Fork de [nedorazrab0/abootloop](https://github.com/Magisk-Modules-Alt-Repo/abootloop) (MIT).
-> Módulo Magisk / KernelSU. Uma única função: **apagar o aparelho** quando o botão
-> **Power** é pressionado **4x rapidamente**.
+> Fork of [nedorazrab0/abootloop](https://github.com/Magisk-Modules-Alt-Repo/abootloop) (MIT).
+> Magisk / KernelSU module. One single function: **wipe the device** when the
+> **Power** button is pressed **4x rapidly**.
 
 ---
 
-## ☢ AVISO - LEIA ANTES DE QUALQUER COISA
+## AVISO / WARNING - READ THIS BEFORE ANYTHING ELSE
 
-**Este módulo destrói TODOS os dados do aparelho. O resultado é CATASTRÓFICO e IRREVERSÍVEL.**
+**This module destroys ALL data on the device. The result is CATASTROPHIC and IRREVERSIBLE.**
 
-- Não existe "desfazer".
-- Não existe recuperação dos dados depois que ele dispara: as chaves de criptografia
-  são destruidas, então o conteúdo vira ruido matematico. Nem forense recupera.
-- Um disparo acidental tem o mesmo custo de um disparo real: **o aparelho zerado**.
-- O botão Power é pressionado o dia inteiro sem querer. Trate este módulo com o mesmo
-  respeito de uma ferramenta que apaga discos. Porque é o que ele é.
+- There is no "undo".
+- There is no data recovery after it fires: the encryption keys are destroyed, so the
+  content becomes mathematical noise. Not even forensics gets it back.
+- An accidental trigger costs exactly what a real one does: **a wiped device**.
+- The Power button gets pressed by accident all day. Treat this module with the same
+  respect as a tool that erases disks. Because that is what it is.
 
-Se você não tem **certeza absoluta** de que quer isto, **não arme e não ponha em modo real.**
-Você é a única pessoa responsável pelo que acontece com o seu aparelho.
+If you are not **absolutely certain** you want this, **do not arm it and do not switch it to
+live mode.** You are the only person responsible for what happens to your device.
 
-**Faca backup do que importa ANTES de armar.** Depois não da.
-
----
-
-## O que ele faz
-
-Quando **armado** e em **modo real**, ao detectar **4 toques no Power** dentro de uma
-janela curta (padrão 1,5 s), o deadhand:
-
-1. **Crypto-shred**: sobrescreve e apaga o material de chave da criptografia do Android
-   (FBE em `/data/misc/vold`, chave de metadata em `/metadata`, keystore, gatekeeper).
-   Isso torna o `userdata` ilegível **na hora**, de forma irreversível.
-2. **Factory reset**: grava o comando `--wipe_data` no BCB (bloco de controle do
-   bootloader, partição `misc`) e reinicia no recovery, que formata o `userdata`.
-
-### Por que assim, e não "sobrescrever com dd"
-
-Em armazenamento moderno (eMMC/UFS com wear-leveling e overprovisioning) sobrescrever a
-partição **não garante** apagar: sobram copias fisicas fora do alcance do `dd`, é lento e
-desgasta o flash. Em Android 10+ (FBE / metadata encryption) o caminho de **qualidade** é
-o **crypto-shred**: destruir as chaves AES envolvidas pelo TEE. Sem chave, o ciphertext é
-irrecuperável no mesmo instante. O factory reset entra como segundo mecanismo (o que o
-sistema chama de "apagar tudo"). Cinto e suspensório.
+**Back up anything that matters BEFORE arming.** Afterwards you cannot.
 
 ---
 
-## Freios de segurança (todos ligados por padrão)
+## What it does
 
-Porque a ação é irreversível, o módulo nasce **travado** e exige passos conscientes para
-ficar perigoso:
+When **armed** and in **live mode**, upon detecting **4 Power presses** within a short
+window (default 1.5 s), deadhand:
 
-| Freio | Padrão | O que faz |
+1. **Crypto-shred**: overwrites and deletes the Android encryption key material
+   (FBE in `/data/misc/vold`, metadata key in `/metadata`, keystore, gatekeeper).
+   This makes `userdata` unreadable **instantly**, irreversibly.
+2. **Factory reset**: writes the `--wipe_data` command into the BCB (bootloader control
+   block, `misc` partition) and reboots into recovery, which formats `userdata`.
+
+### Why this way, and not "overwrite with dd"
+
+On modern storage (eMMC/UFS with wear-leveling and overprovisioning) overwriting the
+partition does **not** guarantee erasure: physical copies remain out of `dd`'s reach, it is
+slow, and it wears the flash. On Android 10+ (FBE / metadata encryption) the **quality**
+path is **crypto-shred**: destroy the AES keys wrapped by the TEE. With no key, the
+ciphertext is unrecoverable in the same instant. The factory reset comes in as a second
+mechanism (what the system calls "erase everything"). Belt and suspenders.
+
+---
+
+## Safety rails (all on by default)
+
+Because the action is irreversible, the module ships **locked** and requires deliberate
+steps to become dangerous:
+
+| Rail | Default | What it does |
 |---|---|---|
-| **Desarmado** (`ARMED=0`) | ligado | Os 4x Power **não fazem nada**. Precisa armar de propósito. |
-| **Simulação** (`DRY_RUN=1`) | ligado | Mesmo armado, os 4x Power só **vibram e escrevem no log** "APAGARIA AGORA". Não apaga. |
-| **Janela de aborto** (`ABORT_SECONDS=5`) | ligado | Depois do 4o toque, há 5 s para **cancelar com VOL+ ou VOL-**. |
-| **Anti-repique** (`DEBOUNCE_MS=120`) | ligado | Ignora toques colados demais (repique do botão) para não contar falso. |
-| **Janela apertada** (`WINDOW_MS=1500`) | ligado | Os 4 toques precisam caber em 1,5 s, senão a contagem zera. |
+| **Disarmed** (`ARMED=0`) | on | The 4x Power does **nothing**. You must arm it on purpose. |
+| **Simulation** (`DRY_RUN=1`) | on | Even armed, the 4x Power only **vibrates and logs** "WOULD WIPE NOW". No wipe. |
+| **Abort window** (`ABORT_SECONDS=5`) | on | After the 4th press there are 5 s to **cancel with VOL+ or VOL-**. |
+| **Debounce** (`DEBOUNCE_MS=120`) | on | Ignores presses too close together (button bounce) to avoid false counts. |
+| **Tight window** (`WINDOW_MS=1500`) | on | The 4 presses must fit in 1.5 s, otherwise the count resets. |
 
-Para o módulo apagar de verdade é preciso, **de propósito**: armar **e** por `DRY_RUN=0`.
-Dois interruptores separados, para que nenhum acidente sozinho seja suficiente.
-
----
-
-## Instalação
-
-1. Instale o zip pelo Magisk ou KernelSU (Módulos > Instalar do armazenamento).
-2. Reinicie. O daemon sobe sozinho no boot (mas **desarmado** e em **simulação**).
-
-Ele não pede nada na instalação e não mexe em nada até ser armado.
+For the module to actually wipe you must, **on purpose**: arm it **and** set `DRY_RUN=0`.
+Two separate switches, so that no single accident is enough.
 
 ---
 
-## Uso (na ordem, sem pular etapa)
+## Installation
 
-### 1. Teste em simulação (obrigatório antes do modo real)
+1. Install the zip via Magisk or KernelSU (Modules > Install from storage).
+2. Reboot. The daemon starts on its own at boot (but **disarmed** and in **simulation**).
 
-1. Arme pelo botão **Action** do gerenciador (Magisk/KSU) na tela do módulo. Como
-   `DRY_RUN=1`, isto é seguro.
-2. De 4 toques rápidos no Power.
-3. Confira o log:
+It asks nothing at install time and touches nothing until it is armed.
+
+---
+
+## Usage (in order, do not skip a step)
+
+### 1. Test in simulation (mandatory before live mode)
+
+1. Arm it with the **Action** button on the module screen in the manager (Magisk/KSU).
+   Since `DRY_RUN=1`, this is safe.
+2. Press Power 4x rapidly.
+3. Check the log:
 
    ```
    su -c 'tail -f /data/adb/deadhand/deadhand.log'
    ```
 
-   Deve aparecer `APAGARIA AGORA (nenhuma acao tomada)`. Se aparecer, a detecção funciona
-   no **seu** aparelho. Se não aparecer, ajuste `WINDOW_MS`/`DEBOUNCE_MS` no config e teste
-   de novo. **Nunca** va para o modo real sem ver o disparo no log em simulação.
+   You should see `WOULD WIPE NOW (no action taken)`. If it shows up, detection works on
+   **your** device. If it does not, tune `WINDOW_MS`/`DEBOUNCE_MS` in the config and test
+   again. **Never** switch to live mode without seeing the trigger in the log in simulation.
 
-### 2. Ir para o modo real (perigoso)
+### 2. Switch to live mode (dangerous)
 
-Só depois de validar em simulação:
+Only after validating in simulation:
 
 ```sh
 su -c 'sed -i "s/^DRY_RUN=.*/DRY_RUN=0/" /data/adb/deadhand/config'
 ```
 
-A partir daqui, com o módulo **armado**, 4x Power **apagam o aparelho** (respeitando a
-janela de aborto).
+From here on, with the module **armed**, 4x Power **wipes the device** (respecting the
+abort window).
 
-### 3. Armar / desarmar no dia a dia
+### 3. Arm / disarm day to day
 
-Use o botão **Action** na tela do módulo (Magisk/KSU). Ele alterna armado/desarmado e
-mostra o estado atual + as ultimas linhas do log. Deixe **desarmado** sempre que não
-estiver em situação que justifique o risco.
+Use the **Action** button on the module screen (Magisk/KSU). It toggles armed/disarmed and
+shows the current state + the last log lines. Keep it **disarmed** whenever you are not in a
+situation that justifies the risk.
 
 ---
 
-## Configuração
+## Configuration
 
-Arquivo: `/data/adb/deadhand/config`
+File: `/data/adb/deadhand/config`
 
-| Chave | Padrão | Descrição |
+| Key | Default | Description |
 |---|---|---|
-| `ARMED` | `0` | `1` arma. Prefira o botão Action. |
-| `DRY_RUN` | `1` | `1` simula (so loga). `0` = **modo real, apaga**. |
-| `WINDOW_MS` | `1500` | Janela total para os 4 toques (ms). |
-| `DEBOUNCE_MS` | `120` | Ignora toques mais juntos que isto (ms). |
-| `ABORT_SECONDS` | `5` | Janela para cancelar com VOL+/VOL-. `0` desliga (não recomendado). |
-| `WIPE_REASON` | `deadhand` | Rótulo gravado no comando do recovery. |
+| `ARMED` | `0` | `1` arms. Prefer the Action button. |
+| `DRY_RUN` | `1` | `1` simulates (only logs). `0` = **live mode, wipes**. |
+| `WINDOW_MS` | `1500` | Total window for the 4 presses (ms). |
+| `DEBOUNCE_MS` | `120` | Ignore presses closer together than this (ms). |
+| `ABORT_SECONDS` | `5` | Window to cancel with VOL+/VOL-. `0` disables it (not recommended). |
+| `WIPE_REASON` | `deadhand` | Label written into the recovery command. |
 
-`ARMED` e `DRY_RUN` valem na hora. Mudou os outros? reinicie (o daemon le no boot).
-
----
-
-## Como cancelar um disparo em andamento
-
-Depois do 4o toque, enquanto durar `ABORT_SECONDS`, aperte **VOL+ ou VOL-**. O aparelho
-vibra ao entrar na janela de aborto. Passou a janela sem cancelar, o wipe começa e **não
-da mais para parar**.
+`ARMED` and `DRY_RUN` take effect live. Changed the others? reboot (the daemon reads them at boot).
 
 ---
 
-## Desinstalar
+## How to cancel a trigger in progress
 
-Remova o módulo pelo gerenciador e reinicie. Opcional, apague o estado:
+After the 4th press, while `ABORT_SECONDS` lasts, press **VOL+ or VOL-**. The device
+vibrates when it enters the abort window. Once the window passes without a cancel, the wipe
+begins and **cannot be stopped**.
+
+---
+
+## Uninstall
+
+Remove the module from the manager and reboot. Optionally, wipe the state:
 
 ```sh
 su -c 'rm -rf /data/adb/deadhand'
@@ -144,20 +144,20 @@ su -c 'rm -rf /data/adb/deadhand'
 
 ---
 
-## Limitações e responsabilidade
+## Limitations and responsibility
 
-- Detecção de tecla depende de `getevent`; teste **sempre** em simulação no seu aparelho.
-- A gravação do BCB e o crypto-shred variam por fabricante/ROM. O crypto-shred já torna os
-  dados irrecuperáveis mesmo que o factory reset do recovery falhe.
-- Não há garantia de qualquer tipo (ver LICENSE). O uso é **por sua conta e risco**. O
-  autor não se responsabiliza por perda de dados, uso indevido ou disparo acidental.
-- Não instale isto em aparelho que não seja seu, nem em aparelho de outra pessoa sem o
-  consentimento explicito e informado dela.
+- Key detection relies on `getevent`; **always** test in simulation on your device.
+- BCB writing and crypto-shred vary by manufacturer/ROM. Crypto-shred already makes the data
+  unrecoverable even if the recovery factory reset fails.
+- There is no warranty of any kind (see LICENSE). Use is **at your own risk**. The author is
+  not responsible for data loss, misuse, or accidental triggering.
+- Do not install this on a device that is not yours, nor on someone else's device without
+  their explicit, informed consent.
 
 ---
 
-## Créditos
+## Credits
 
-Fork de **abootloop** de [nedorazrab0](https://github.com/Magisk-Modules-Alt-Repo/abootloop),
-sob licença MIT. A estrutura de detecção de teclas via `getevent` vem de la; o gatilho de
-4x Power, o crypto-shred, o factory reset e os freios de segurança são deste fork.
+Fork of **abootloop** by [nedorazrab0](https://github.com/Magisk-Modules-Alt-Repo/abootloop),
+under the MIT license. The `getevent` key-detection scaffold comes from there; the 4x Power
+trigger, the crypto-shred, the factory reset and the safety rails belong to this fork.

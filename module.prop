@@ -2,6 +2,9 @@ id=deadhand
 name=deadhand (panic wipe)
 version=v0.1.0
 versionCode=1
-author=VD171 (fork de nedorazrab0/abootloop)
-description=[!] CATASTROFICO E IRREVERSIVEL. 4x no botao Power (rapido) apaga o aparelho: crypto-shred das chaves FBE + factory reset. Nasce DESARMADO e em DRY_RUN (so simula). Botao Action = armar/desarmar. LEIA O README ANTES.
+author=VD171 (fork of nedorazrab0/abootloop)
+description=[!] CATASTROPHIC AND IRREVERSIBLE. Pressing Power 4x rapidly wipes the device: crypto-shred of the FBE keys + factory reset. Ships DISARMED and in DRY_RUN (simulation only). Action button = arm/disarm. READ THE README FIRST.
 updateJson=https://raw.githubusercontent.com/VD171/deadhand/main/update.json
+
+zipUrl=https://github.com/VD171/deadhand/releases/download/v0.1.0/deadhand.zip
+changelog=https://raw.githubusercontent.com/VD171/deadhand/main/changelog.md

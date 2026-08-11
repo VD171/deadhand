@@ -1,9 +1,9 @@
-# deadhand - biblioteca de funcoes (POSIX sh / busybox).
+# deadhand - function library (POSIX sh / busybox).
 #
 # ##########################################################################
-# #  ATENCAO: este modulo APAGA O APARELHO. As funcoes abaixo destroem     #
-# #  dados de forma IRREVERSIVEL. Nao chame do_wipe/crypto_shred a mao     #
-# #  sem entender exatamente o que fazem.                                  #
+# #  WARNING: this module WIPES THE DEVICE. The functions below destroy    #
+# #  data IRREVERSIBLY. Do not call do_wipe/crypto_shred by hand unless     #
+# #  you understand exactly what they do.                                   #
 # ##########################################################################
 
 STATE=/data/adb/deadhand
@@ -12,11 +12,11 @@ LOG="${STATE}/deadhand.log"
 PIDFILE="${STATE}/daemon.pid"
 
 # ---------------------------------------------------------------------------
-# Estado e configuracao
+# State and configuration
 # ---------------------------------------------------------------------------
 
 log() {
-  # Log datado. Mantem no maximo ~500 linhas para nao crescer sem limite.
+  # Timestamped log. Keeps at most ~500 lines so it does not grow forever.
   echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "${LOG}" 2>/dev/null
   if [ -f "${LOG}" ]; then
     lines=$(wc -l < "${LOG}" 2>/dev/null || echo 0)
@@ -31,23 +31,23 @@ ensure_state() {
   chmod 700 "${STATE}" 2>/dev/null
   if [ ! -f "${CONFIG}" ]; then
     cat > "${CONFIG}" <<'EOF'
-# deadhand - configuracao de runtime.
+# deadhand - runtime configuration.
 # ##########################################################################
-# #  MODULO DE WIPE CATASTROFICO. Ler o README antes de mexer aqui.        #
+# #  CATASTROPHIC WIPE MODULE. Read the README before touching this.       #
 # ##########################################################################
 #
-# ARMED : 0 = desarmado (os 4x Power nao fazem NADA). 1 = armado.
-#         Prefira armar/desarmar pelo botao Action do gerenciador (Magisk/KSU).
-# DRY_RUN : 1 = simula (so vibra e escreve no log "APAGARIA AGORA"; nao apaga).
-#           0 = MODO REAL. Os 4x Power APAGAM o aparelho.
-# WINDOW_MS : janela total para os 4 toques, em milissegundos.
-# DEBOUNCE_MS : ignora toques mais juntos que isto (anti-repique do botao).
-# ABORT_SECONDS : janela para CANCELAR com VOL+ ou VOL- depois do 4o toque.
-#                 0 desliga o cancelamento (nao recomendado).
-# WIPE_REASON : rotulo gravado no comando de recovery (rastro no log do wipe).
+# ARMED : 0 = disarmed (the 4x Power does NOTHING). 1 = armed.
+#         Prefer arming/disarming from the manager Action button (Magisk/KSU).
+# DRY_RUN : 1 = simulate (only vibrates and logs "WOULD WIPE NOW"; no wipe).
+#           0 = LIVE MODE. The 4x Power WIPES the device.
+# WINDOW_MS : total window for the 4 presses, in milliseconds.
+# DEBOUNCE_MS : ignore presses closer together than this (button bounce guard).
+# ABORT_SECONDS : window to CANCEL with VOL+ or VOL- after the 4th press.
+#                 0 disables cancellation (not recommended).
+# WIPE_REASON : label written into the recovery command (trace in the wipe log).
 #
-# Alterou WINDOW_MS/DEBOUNCE_MS/ABORT_SECONDS? reinicie o aparelho (o daemon le
-# esses valores ao subir). ARMED e DRY_RUN sao lidos a cada disparo (valem na hora).
+# Changed WINDOW_MS/DEBOUNCE_MS/ABORT_SECONDS? reboot (the daemon reads these
+# at start). ARMED and DRY_RUN are read on every trigger (they take effect live).
 
 ARMED=0
 DRY_RUN=1
@@ -60,7 +60,7 @@ EOF
   fi
 }
 
-# set_cfg CHAVE VALOR  -> grava/atualiza a chave no arquivo de config
+# set_cfg KEY VALUE  -> write/update the key in the config file
 set_cfg() {
   k="$1"; v="$2"
   ensure_state
@@ -71,7 +71,7 @@ set_cfg() {
   fi
 }
 
-# Relogio em milissegundos, tolerante a busybox/toybox sem %N.
+# Clock in milliseconds, tolerant of busybox/toybox without %N support.
 now_ms() {
   n=$(date +%s%N 2>/dev/null)
   case "${n}" in
@@ -81,10 +81,10 @@ now_ms() {
 }
 
 # ---------------------------------------------------------------------------
-# Deteccao de teclas
+# Key detection
 # ---------------------------------------------------------------------------
 
-# Descobre os nos /dev/input/eventN que anunciam KEY_POWER.
+# Find the /dev/input/eventN nodes that advertise KEY_POWER.
 get_pow_nodes() {
   getevent -lp 2>/dev/null | awk '
     /add device [0-9]+:/ { path=$4 }
@@ -92,7 +92,7 @@ get_pow_nodes() {
   '
 }
 
-# Feedback tatil, melhor esforco (varia por aparelho).
+# Haptic feedback, best effort (varies by device).
 vibrate() {
   ms="${1:-200}"
   echo "${ms}" > /sys/class/timed_output/vibrator/enable 2>/dev/null && return 0
@@ -100,13 +100,13 @@ vibrate() {
   echo 1       > /sys/class/leds/vibrator/activate 2>/dev/null
 }
 
-# Janela de cancelamento. Retorna 0 se o usuario cancelou (VOL+/VOL-),
-# 1 se a contagem terminou sem cancelamento (segue para o wipe).
+# Cancellation window. Returns 0 if the user cancelled (VOL+/VOL-),
+# 1 if the countdown ended without cancellation (proceed to the wipe).
 abort_wait() {
   s="${ABORT_SECONDS:-5}"
   case "${s}" in ""|*[!0-9]*) s=0;; esac
   [ "${s}" -gt 0 ] || return 1
-  log "janela de aborto: ${s}s (VOL+ ou VOL- cancela)"
+  log "abort window: ${s}s (VOL+ or VOL- cancels)"
   vibrate 400
   if timeout "${s}" getevent -lq 2>/dev/null | grep -m1 -qE 'KEY_VOLUME(UP|DOWN).*DOWN'; then
     return 0
@@ -115,16 +115,16 @@ abort_wait() {
 }
 
 # ---------------------------------------------------------------------------
-# Destruicao dos dados (IRREVERSIVEL)
+# Data destruction (IRREVERSIBLE)
 # ---------------------------------------------------------------------------
 
-# Crypto-shred: destroi o material de chave da criptografia (FBE + metadata +
-# gatekeeper/keystore). Em aparelhos criptografados isso torna o userdata
-# ilegivel na hora, sem depender de sobrescrever o flash (que e' incompleto por
-# wear-leveling). E' o "cinto" que garante irreversibilidade mesmo que o wipe
-# do recovery seja interrompido.
+# Crypto-shred: destroys the encryption key material (FBE + metadata +
+# gatekeeper/keystore). On encrypted devices this makes userdata unreadable
+# instantly, without relying on overwriting the flash (which is incomplete due
+# to wear-leveling). This is the "belt" that guarantees irreversibility even if
+# the recovery wipe is interrupted.
 crypto_shred() {
-  log "crypto-shred: destruindo chaves FBE/metadata/keystore"
+  log "crypto-shred: destroying FBE/metadata/keystore keys"
   targets="
     /data/misc/vold
     /data/vold
@@ -149,7 +149,7 @@ crypto_shred() {
   sync
 }
 
-# Localiza a particao 'misc' (bloco de controle do bootloader / BCB).
+# Locate the 'misc' partition (bootloader control block / BCB).
 find_misc() {
   for p in \
     /dev/block/by-name/misc \
@@ -161,21 +161,21 @@ find_misc() {
   return 1
 }
 
-# Escreve no BCB o comando "boot-recovery" + "--wipe_data". No proximo boot o
-# recovery faz o factory reset (em FBE, isso descarta as chaves de classe).
-# Layout do bootloader_message: command[32], status[32], recovery[768...].
+# Write "boot-recovery" + "--wipe_data" into the BCB. On the next boot the
+# recovery performs the factory reset (on FBE, that discards the class keys).
+# bootloader_message layout: command[32], status[32], recovery[768...].
 write_bcb() {
   misc=$(find_misc) || return 1
   tmp="${STATE}/bcb.img"
   {
     printf 'boot-recovery'                # 13 bytes
-    dd if=/dev/zero bs=1 count=19 2>/dev/null   # completa command[32]
+    dd if=/dev/zero bs=1 count=19 2>/dev/null   # pad command[32]
     dd if=/dev/zero bs=1 count=32 2>/dev/null   # status[32]
     printf 'recovery\n--wipe_data\n--reason=%s\n' "${WIPE_REASON:-deadhand}"
   } > "${tmp}" 2>/dev/null
   dd if="${tmp}" of="${misc}" bs=1 conv=notrunc 2>/dev/null || { rm -f "${tmp}"; return 1; }
   rm -f "${tmp}" 2>/dev/null
-  log "BCB gravado em ${misc}"
+  log "BCB written to ${misc}"
   return 0
 }
 
@@ -187,15 +187,15 @@ do_reboot_recovery() {
     || setprop sys.powerctl reboot,recovery 2>/dev/null
 }
 
-# Sequencia catastrofica: mata as chaves, arma o recovery e reinicia.
+# Catastrophic sequence: kill the keys, arm the recovery, reboot.
 do_wipe() {
-  log "!!! EXECUTANDO WIPE !!!"
+  log "!!! EXECUTING WIPE !!!"
   crypto_shred
   if write_bcb; then
-    log "rebootando para o recovery (factory reset)"
+    log "rebooting into recovery (factory reset)"
     do_reboot_recovery
   else
-    log "misc/BCB indisponivel - fallback /cache + framework"
+    log "misc/BCB unavailable - falling back to /cache + framework"
     mkdir -p /cache/recovery 2>/dev/null
     printf -- '--wipe_data\n--reason=%s\n' "${WIPE_REASON:-deadhand}" \
       > /cache/recovery/command 2>/dev/null
@@ -206,23 +206,23 @@ do_wipe() {
   fi
 }
 
-# Chamado quando os 4x Power sao detectados dentro da janela.
+# Called when the 4x Power is detected within the window.
 trigger_sequence() {
-  # Le ARMED/DRY_RUN/ABORT_SECONDS frescos do disco (valem na hora).
+  # Read fresh ARMED/DRY_RUN/ABORT_SECONDS from disk (they take effect live).
   . "${CONFIG}" 2>/dev/null
   if [ "${ARMED}" != "1" ]; then
-    log "padrao 4x Power visto, mas DESARMADO - ignorado"
+    log "4x Power pattern seen, but DISARMED - ignored"
     return 0
   fi
-  log "GATILHO: 4x Power detectado (armado)"
+  log "TRIGGER: 4x Power detected (armed)"
   vibrate 300
   if [ "${DRY_RUN}" = "1" ]; then
-    log "DRY_RUN=1 -> APAGARIA AGORA (nenhuma acao tomada)"
+    log "DRY_RUN=1 -> WOULD WIPE NOW (no action taken)"
     vibrate 120; vibrate 120
     return 0
   fi
   if abort_wait; then
-    log "ABORTADO pelo usuario na janela de cancelamento"
+    log "ABORTED by user during the cancellation window"
     vibrate 120
     return 0
   fi
@@ -230,25 +230,25 @@ trigger_sequence() {
 }
 
 # ---------------------------------------------------------------------------
-# Daemon persistente
+# Persistent daemon
 # ---------------------------------------------------------------------------
 
 run_daemon() {
   ensure_state
   . "${CONFIG}" 2>/dev/null
 
-  # Instancia unica.
+  # Single instance.
   if [ -f "${PIDFILE}" ] && kill -0 "$(cat "${PIDFILE}" 2>/dev/null)" 2>/dev/null; then
-    log "daemon ja rodando (pid $(cat "${PIDFILE}")) - saindo"
+    log "daemon already running (pid $(cat "${PIDFILE}")) - exiting"
     return 0
   fi
   echo $$ > "${PIDFILE}"
-  log "daemon iniciado (pid $$)"
+  log "daemon started (pid $$)"
 
   while : ; do
-    node=$(get_pow_nodes | head -n1)   # vazio = monitora todos os nos
-    # Fluxo continuo de eventos. O corpo do while roda no mesmo subshell,
-    # entao t1..t4 e prev persistem entre os eventos.
+    node=$(get_pow_nodes | head -n1)   # empty = monitor all nodes
+    # Continuous event stream. The while body runs in the same subshell, so
+    # t1..t4 and prev persist across events.
     getevent -lq ${node} 2>/dev/null | while read -r line; do
       case "${line}" in
         *KEY_POWER*DOWN*) : ;;
@@ -257,13 +257,13 @@ run_daemon() {
       : "${t1:=0}" "${t2:=0}" "${t3:=0}" "${t4:=0}" "${prev:=0}"
 
       now=$(now_ms)
-      # Anti-repique.
+      # Debounce.
       if [ "${prev}" -ne 0 ] && [ $(( now - prev )) -lt "${DEBOUNCE_MS}" ]; then
         continue
       fi
       prev="${now}"
 
-      # Janela deslizante dos ultimos 4 toques.
+      # Sliding window over the last 4 presses.
       t1="${t2}"; t2="${t3}"; t3="${t4}"; t4="${now}"
       if [ "${t1}" -ne 0 ]; then
         span=$(( t4 - t1 ))
@@ -273,7 +273,7 @@ run_daemon() {
         fi
       fi
     done
-    # getevent caiu (hotplug/erro): recomeca sem busy-loop.
+    # getevent died (hotplug/error): restart without a busy-loop.
     sleep 2
   done
 }

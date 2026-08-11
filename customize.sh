@@ -1,4 +1,4 @@
-# deadhand - instalacao. Nao pede nada; instala DESARMADO e em DRY_RUN.
+# deadhand - installation. Asks nothing; installs DISARMED and in DRY_RUN.
 SKIPUNZIP=0
 
 ui_print ""
@@ -9,31 +9,31 @@ ui_print "  #        panic wipe / dead-man switch         #"
 ui_print "  #                                             #"
 ui_print "  ###############################################"
 ui_print ""
-ui_print "  [!] ATENCAO - LEIA COM CUIDADO"
+ui_print "  [!] WARNING - READ CAREFULLY"
 ui_print ""
-ui_print "  Este modulo APAGA O APARELHO quando o botao"
-ui_print "  Power e' pressionado 4x rapidamente."
+ui_print "  This module WIPES THE DEVICE when the Power"
+ui_print "  button is pressed 4x rapidly."
 ui_print ""
-ui_print "  O resultado e' CATASTROFICO e IRREVERSIVEL:"
-ui_print "  crypto-shred das chaves + factory reset."
-ui_print "  NAO ha desfazer. NAO ha recuperacao."
+ui_print "  The result is CATASTROPHIC and IRREVERSIBLE:"
+ui_print "  crypto-shred of the keys + factory reset."
+ui_print "  There is NO undo. There is NO recovery."
 ui_print ""
-ui_print "  Por seguranca ele nasce:"
-ui_print "    - DESARMADO (ARMED=0): 4x Power nao faz nada"
-ui_print "    - em SIMULACAO (DRY_RUN=1): so escreve no log"
+ui_print "  For safety it ships:"
+ui_print "    - DISARMED (ARMED=0): 4x Power does nothing"
+ui_print "    - in SIMULATION (DRY_RUN=1): only logs"
 ui_print ""
-ui_print "  Para usar de verdade voce precisa, de proposito:"
-ui_print "    1) Armar (botao Action no gerenciador)"
-ui_print "    2) Testar em DRY_RUN e conferir o log"
-ui_print "    3) So entao por DRY_RUN=0 no config"
+ui_print "  To use it for real you must, on purpose:"
+ui_print "    1) Arm it (Action button in the manager)"
+ui_print "    2) Test in DRY_RUN and check the log"
+ui_print "    3) Only then set DRY_RUN=0 in the config"
 ui_print ""
 ui_print "  Config: /data/adb/deadhand/config"
 ui_print "  Log:    /data/adb/deadhand/deadhand.log"
 ui_print ""
-ui_print "  Faca BACKUP do que importa ANTES de armar."
+ui_print "  BACK UP anything that matters BEFORE arming."
 ui_print ""
 
-# Cria estado/config padrao (desarmado + dry-run).
+# Create default state/config (disarmed + dry-run).
 mkdir -p /data/adb/deadhand 2>/dev/null
 chmod 700 /data/adb/deadhand 2>/dev/null
 if [ ! -f /data/adb/deadhand/config ]; then
@@ -54,5 +54,5 @@ set_perm "${MODPATH}/post-fs-data.sh" 0 0 0755
 set_perm "${MODPATH}/action.sh"       0 0 0755
 set_perm "${MODPATH}/common/functions.sh" 0 0 0755
 
-ui_print "  Instalado DESARMADO. Reinicie para carregar o daemon."
+ui_print "  Installed DISARMED. Reboot to load the daemon."
 ui_print ""
