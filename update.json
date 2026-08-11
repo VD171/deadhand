@@ -1,6 +1,6 @@
 {
   "version": "v0.1.0",
   "versionCode": 1,
-  "zipUrl": "",
-  "changelog": ""
+  "zipUrl": "https://github.com/VD171/deadhand/releases/download/v0.1.0/deadhand.zip",
+  "changelog": "https://raw.githubusercontent.com/VD171/deadhand/main/changelog.md"
 }
