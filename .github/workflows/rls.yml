@@ -15,13 +15,13 @@ jobs:
 
       - name: Compressing
         run: |
-          zip -9rv ./abootloop.zip ./* -x ./.git ./.github ./README.md \
+          zip -9rv ./deadhand.zip ./* -x ./.git ./.github ./README.md \
             ./update.json ./changelog.md
 
       - name: Releasing
         run: |
           gh release create "${version}" \
-            ./abootloop.zip -F ./changelog.md
+            ./deadhand.zip -F ./changelog.md
         env:
           GH_TOKEN: ${{ github.token }}
 

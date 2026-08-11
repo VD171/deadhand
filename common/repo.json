@@ -1,8 +1,9 @@
 {
-  "homepage": "https://github.com/Magisk-Modules-Alt-Repo/abootloop",
+  "homepage": "https://github.com/VD171/deadhand",
   "categories": [
-    "Bootloop protection", 
-    "Configurable", 
+    "Security",
+    "Anti-theft",
+    "Configurable",
     "System"
   ],
   "license": "MIT"

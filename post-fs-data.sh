@@ -1,5 +1,6 @@
+#!/system/bin/sh
+# deadhand - garante o diretorio de estado/config cedo no boot.
+# NAO dispara nada aqui: o gatilho e' so pelo daemon do service.sh.
 MODDIR="${0%/*}"
 . "${MODDIR}/common/functions.sh"
-
-# Wait for the key press for 3 seconds
-press_check 3 && disable_modules
+ensure_state
