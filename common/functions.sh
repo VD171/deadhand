@@ -6,7 +6,8 @@
 # #  you understand exactly what they do.                                   #
 # ##########################################################################
 #
-# Trigger: KEY_VOLUMEDOWN pressed 4x rapidly.  Abort: KEY_VOLUMEUP.
+# Trigger: HOLD Volume-Down + Volume-Up together for HOLD_SECONDS (default 5s).
+#          Release either key before the time is up to CANCEL.
 # (Volume is used instead of Power because on Android 12+ rapid Power presses
 #  are grabbed by the OS Emergency SOS feature; see the README.)
 
@@ -40,26 +41,22 @@ ensure_state() {
 # #  CATASTROPHIC WIPE MODULE. Read the README before touching this.       #
 # ##########################################################################
 #
-# Trigger: Volume-Down (VOL-) pressed 4x rapidly.  Cancel: Volume-Up (VOL+).
+# Trigger: HOLD Volume-Down + Volume-Up together for HOLD_SECONDS.
+#          Release either key before the time is up to cancel.
 #
-# ARMED : 0 = disarmed (the 4x VOL- does NOTHING). 1 = armed.
+# ARMED : 0 = disarmed (holding the combo does NOTHING). 1 = armed.
 #         Prefer arming/disarming from the manager Action button (Magisk/KSU).
 # DRY_RUN : 1 = simulate (only vibrates and logs "WOULD WIPE NOW"; no wipe).
-#           0 = LIVE MODE. The 4x VOL- WIPES the device.
-# WINDOW_MS : total window for the 4 presses, in milliseconds.
-# DEBOUNCE_MS : ignore presses closer together than this (button bounce guard).
-# ABORT_SECONDS : window to CANCEL with VOL+ after the 4th press.
-#                 0 disables cancellation (not recommended).
+#           0 = LIVE MODE. Holding the combo for HOLD_SECONDS WIPES the device.
+# HOLD_SECONDS : how long both keys must be held together to fire.
 # WIPE_REASON : label written into the recovery command (trace in the wipe log).
 #
-# Changed WINDOW_MS/DEBOUNCE_MS/ABORT_SECONDS? reboot (the daemon reads these
-# at start). ARMED and DRY_RUN are read on every trigger (they take effect live).
+# Changed HOLD_SECONDS? reboot (the daemon reads it at start). ARMED and DRY_RUN
+# are read on every trigger (they take effect live).
 
 ARMED=0
 DRY_RUN=1
-WINDOW_MS=1500
-DEBOUNCE_MS=120
-ABORT_SECONDS=5
+HOLD_SECONDS=5
 WIPE_REASON=deadhand
 EOF
     chmod 600 "${CONFIG}" 2>/dev/null
@@ -77,26 +74,17 @@ set_cfg() {
   fi
 }
 
-# Clock in milliseconds, tolerant of busybox/toybox without %N support.
-now_ms() {
-  n=$(date +%s%N 2>/dev/null)
-  case "${n}" in
-    ""|*[!0-9]*) echo $(( $(date +%s) * 1000 ));;
-    *)           echo $(( n / 1000000 ));;
-  esac
-}
-
 # ---------------------------------------------------------------------------
 # Key detection
 # ---------------------------------------------------------------------------
 
-# List the /dev/input/eventN nodes that advertise KEY_VOLUMEDOWN (diagnostic;
+# List the /dev/input/eventN nodes that advertise the volume keys (diagnostic;
 # the daemon reads ALL nodes, this is only logged at startup).
-list_voldown_nodes() {
+list_volume_nodes() {
   getevent -lp 2>/dev/null | awk '
-    /add device [0-9]+:/    { path=$4 }
-    /KEY_VOLUMEDOWN/ && path { print path; path="" }
-  '
+    /add device [0-9]+:/                 { path=$4 }
+    /KEY_VOLUMEUP|KEY_VOLUMEDOWN/ && path { print path; path="" }
+  ' | sort -u
 }
 
 # Haptic feedback, best effort (varies by device).
@@ -107,18 +95,23 @@ vibrate() {
   echo 1       > /sys/class/leds/vibrator/activate 2>/dev/null
 }
 
-# Cancellation window. Returns 0 if the user cancelled (VOL+),
-# 1 if the countdown ended without cancellation (proceed to the wipe).
-abort_wait() {
-  s="${ABORT_SECONDS:-5}"
-  case "${s}" in ""|*[!0-9]*) s=0;; esac
-  [ "${s}" -gt 0 ] || return 1
-  log "abort window: ${s}s (press VOL+ to cancel)"
-  vibrate 400
-  if timeout "${s}" getevent -lq 2>/dev/null | grep -m1 -qE 'KEY_VOLUMEUP.*DOWN'; then
-    return 0
+# Both keys are currently down. Wait HOLD_SECONDS; if EITHER volume key is
+# released in that time, the user let go -> cancel. If the window elapses with
+# no release, the combo was held the whole time -> fire.
+# Returns 0 = held the full window (fire), 1 = released early (cancel).
+#
+# Why a second getevent stream: during a static hold NO events flow, so we
+# cannot measure the elapsed time by reading events. `timeout` provides the
+# clock; grep provides the early-release abort. evdev broadcasts to every
+# reader, so this stream sees the release even though the main loop also reads.
+hold_check() {
+  hs="${HOLD_SECONDS:-5}"
+  case "${hs}" in ""|*[!0-9]*) hs=5;; esac
+  if timeout "${hs}" getevent -lq 2>/dev/null \
+       | grep -m1 -qE 'KEY_VOLUME(UP|DOWN)[[:space:]]+UP'; then
+    return 1   # a release event arrived within the window
   fi
-  return 1
+  return 0     # window elapsed with no release -> still held
 }
 
 # ---------------------------------------------------------------------------
@@ -213,26 +206,21 @@ do_wipe() {
   fi
 }
 
-# Called when the 4x VOL- is detected within the window.
+# Called when the combo has been held for the full HOLD_SECONDS.
 trigger_sequence() {
-  # Read fresh ARMED/DRY_RUN/ABORT_SECONDS from disk (they take effect live).
+  # Read fresh ARMED/DRY_RUN from disk (they take effect live).
   . "${CONFIG}" 2>/dev/null
   if [ "${ARMED}" != "1" ]; then
-    log "4x VOL- pattern seen, but DISARMED - ignored"
+    log "combo held, but DISARMED - ignored"
     return 0
   fi
-  log "TRIGGER: 4x VOL- detected (armed)"
-  vibrate 300
+  log "TRIGGER: combo held for ${HOLD_SECONDS:-5}s (armed)"
   if [ "${DRY_RUN}" = "1" ]; then
     log "DRY_RUN=1 -> WOULD WIPE NOW (no action taken)"
     vibrate 120; vibrate 120
     return 0
   fi
-  if abort_wait; then
-    log "ABORTED by user during the cancellation window"
-    vibrate 120
-    return 0
-  fi
+  vibrate 600
   do_wipe
 }
 
@@ -250,35 +238,33 @@ run_daemon() {
     return 0
   fi
   echo $$ > "${PIDFILE}"
-  log "daemon started (pid $$); VOL- nodes: $(list_voldown_nodes | tr '\n' ' ')"
+  log "daemon started (pid $$); volume nodes: $(list_volume_nodes | tr '\n' ' ')"
 
   while : ; do
-    # Read ALL input devices and filter for KEY_VOLUMEDOWN. Reading every node
-    # (instead of guessing one) avoids the wrong-node trap: KEY_VOLUMEDOWN is
-    # advertised by several devices. Non-matching events (e.g. touch) cost only
-    # a case test and never fork, so this stays cheap. The while body runs in
-    # the same subshell, so t1..t4 and prev persist across events.
+    # Read ALL input devices and track the pressed state of both volume keys.
+    # Reading every node (instead of guessing one) avoids the wrong-node trap:
+    # KEY_VOLUME* is advertised by several devices. Non-matching events cost
+    # only a case test and never fork. The while body runs in the same subshell,
+    # so vd/vu persist across events.
     getevent -lq 2>/dev/null | while IFS= read -r line; do
       case "${line}" in
-        *KEY_VOLUMEDOWN*DOWN*) : ;;
+        *KEY_VOLUMEDOWN*DOWN*) vd=1 ;;
+        *KEY_VOLUMEDOWN*UP*)   vd=0 ;;
+        *KEY_VOLUMEUP*DOWN*)   vu=1 ;;
+        *KEY_VOLUMEUP*UP*)     vu=0 ;;
         *) continue ;;
       esac
-      : "${t1:=0}" "${t2:=0}" "${t3:=0}" "${t4:=0}" "${prev:=0}"
 
-      now=$(now_ms)
-      # Debounce.
-      if [ "${prev}" -ne 0 ] && [ $(( now - prev )) -lt "${DEBOUNCE_MS}" ]; then
-        continue
-      fi
-      prev="${now}"
-
-      # Sliding window over the last 4 presses.
-      t1="${t2}"; t2="${t3}"; t3="${t4}"; t4="${now}"
-      if [ "${t1}" -ne 0 ]; then
-        span=$(( t4 - t1 ))
-        if [ "${span}" -le "${WINDOW_MS}" ]; then
-          t1=0; t2=0; t3=0; t4=0
+      # Both keys down right now? Start the hold check.
+      if [ "${vd:-0}" = 1 ] && [ "${vu:-0}" = 1 ]; then
+        log "VOL- + VOL+ down; hold ${HOLD_SECONDS:-5}s to trigger (release cancels)"
+        vibrate 150
+        if hold_check; then
+          vd=0; vu=0
           trigger_sequence
+        else
+          log "combo released early - cancelled"
+          vd=0; vu=0
         fi
       fi
     done

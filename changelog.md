@@ -1,14 +1,21 @@
+###### v0.3.0
+
+- **Trigger changed to a hold-combo: HOLD Volume-Down + Volume-Up together for
+  HOLD_SECONDS (default 5s).** Release either key before the time is up to
+  cancel. A sustained two-button hold is far harder to hit by accident than a
+  tap count, and the hold itself is the change-your-mind window.
+- Detection now tracks the pressed state of both keys and measures the hold with
+  a `timeout getevent` clock (no events flow during a static hold, so a plain
+  event loop cannot time it). A release event within the window cancels.
+- Config: `WINDOW_MS`/`DEBOUNCE_MS`/`ABORT_SECONDS` replaced by `HOLD_SECONDS`.
+  Existing installs keep their config; `HOLD_SECONDS` defaults to 5 if absent.
+
 ###### v0.2.0
 
-- **Trigger changed from Power to Volume-Down (VOL-) 4x.** On Android 12+ rapid
-  Power presses are grabbed by the OS Emergency SOS feature (which pops the
-  emergency dialer and competes for the presses), so Power is unreliable and
-  unsafe as a trigger. Volume-Down avoids that entirely and does not blank the
-  screen. Cancel key is now VOL+.
-- Detection now reads ALL input nodes instead of guessing one, fixing the
-  wrong-node trap (KEY_VOLUMEDOWN is advertised by several devices; the real
-  physical keys live on a specific node). Non-matching events never fork, so it
-  stays cheap.
+- Trigger changed from Power to Volume-Down (VOL-) 4x. On Android 12+ rapid
+  Power presses are grabbed by the OS Emergency SOS feature, so Power is
+  unreliable and unsafe as a trigger. Detection reads all input nodes instead of
+  guessing one.
 
 ###### v0.1.0
 
