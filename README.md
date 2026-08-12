@@ -2,7 +2,7 @@
 
 > Fork of [nedorazrab0/abootloop](https://github.com/Magisk-Modules-Alt-Repo/abootloop) (MIT).
 > Magisk / KernelSU module. One single function: **wipe the device** when the
-> **Power** button is pressed **4x rapidly**.
+> **Volume-Down** button is pressed **4x rapidly**.
 
 ---
 
@@ -14,8 +14,8 @@
 - There is no data recovery after it fires: the encryption keys are destroyed, so the
   content becomes mathematical noise. Not even forensics gets it back.
 - An accidental trigger costs exactly what a real one does: **a wiped device**.
-- The Power button gets pressed by accident all day. Treat this module with the same
-  respect as a tool that erases disks. Because that is what it is.
+- Treat this module with the same respect as a tool that erases disks. Because that is what
+  it is.
 
 If you are not **absolutely certain** you want this, **do not arm it and do not switch it to
 live mode.** You are the only person responsible for what happens to your device.
@@ -26,8 +26,8 @@ live mode.** You are the only person responsible for what happens to your device
 
 ## What it does
 
-When **armed** and in **live mode**, upon detecting **4 Power presses** within a short
-window (default 1.5 s), deadhand:
+When **armed** and in **live mode**, upon detecting **4 Volume-Down (VOL-) presses** within a
+short window (default 1.5 s), deadhand:
 
 1. **Crypto-shred**: overwrites and deletes the Android encryption key material
    (FBE in `/data/misc/vold`, metadata key in `/metadata`, keystore, gatekeeper).
@@ -44,6 +44,15 @@ path is **crypto-shred**: destroy the AES keys wrapped by the TEE. With no key, 
 ciphertext is unrecoverable in the same instant. The factory reset comes in as a second
 mechanism (what the system calls "erase everything"). Belt and suspenders.
 
+### Why Volume-Down, and not Power
+
+The trigger is Volume-Down on purpose. On Android 12+ the OS grabs **rapid Power presses**
+for its **Emergency SOS** feature: pressing Power several times fast pops the emergency
+dialer (and can place an emergency call). That means the system competes for the presses and
+the gesture is both unreliable and dangerous as a wipe trigger. Volume-Down has none of that:
+it is not intercepted, it does not blank the screen, and it reads cleanly. That is why this
+fork moved off Power in v0.2.0.
+
 ---
 
 ## Safety rails (all on by default)
@@ -53,9 +62,9 @@ steps to become dangerous:
 
 | Rail | Default | What it does |
 |---|---|---|
-| **Disarmed** (`ARMED=0`) | on | The 4x Power does **nothing**. You must arm it on purpose. |
-| **Simulation** (`DRY_RUN=1`) | on | Even armed, the 4x Power only **vibrates and logs** "WOULD WIPE NOW". No wipe. |
-| **Abort window** (`ABORT_SECONDS=5`) | on | After the 4th press there are 5 s to **cancel with VOL+ or VOL-**. |
+| **Disarmed** (`ARMED=0`) | on | The 4x VOL- does **nothing**. You must arm it on purpose. |
+| **Simulation** (`DRY_RUN=1`) | on | Even armed, the 4x VOL- only **vibrates and logs** "WOULD WIPE NOW". No wipe. |
+| **Abort window** (`ABORT_SECONDS=5`) | on | After the 4th press there are 5 s to **cancel with VOL+**. |
 | **Debounce** (`DEBOUNCE_MS=120`) | on | Ignores presses too close together (button bounce) to avoid false counts. |
 | **Tight window** (`WINDOW_MS=1500`) | on | The 4 presses must fit in 1.5 s, otherwise the count resets. |
 
@@ -79,7 +88,7 @@ It asks nothing at install time and touches nothing until it is armed.
 
 1. Arm it with the **Action** button on the module screen in the manager (Magisk/KSU).
    Since `DRY_RUN=1`, this is safe.
-2. Press Power 4x rapidly.
+2. Press Volume-Down 4x rapidly.
 3. Check the log:
 
    ```
@@ -98,7 +107,7 @@ Only after validating in simulation:
 su -c 'sed -i "s/^DRY_RUN=.*/DRY_RUN=0/" /data/adb/deadhand/config'
 ```
 
-From here on, with the module **armed**, 4x Power **wipes the device** (respecting the
+From here on, with the module **armed**, 4x VOL- **wipes the device** (respecting the
 abort window).
 
 ### 3. Arm / disarm day to day
@@ -119,7 +128,7 @@ File: `/data/adb/deadhand/config`
 | `DRY_RUN` | `1` | `1` simulates (only logs). `0` = **live mode, wipes**. |
 | `WINDOW_MS` | `1500` | Total window for the 4 presses (ms). |
 | `DEBOUNCE_MS` | `120` | Ignore presses closer together than this (ms). |
-| `ABORT_SECONDS` | `5` | Window to cancel with VOL+/VOL-. `0` disables it (not recommended). |
+| `ABORT_SECONDS` | `5` | Window to cancel with VOL+. `0` disables it (not recommended). |
 | `WIPE_REASON` | `deadhand` | Label written into the recovery command. |
 
 `ARMED` and `DRY_RUN` take effect live. Changed the others? reboot (the daemon reads them at boot).
@@ -128,7 +137,7 @@ File: `/data/adb/deadhand/config`
 
 ## How to cancel a trigger in progress
 
-After the 4th press, while `ABORT_SECONDS` lasts, press **VOL+ or VOL-**. The device
+After the 4th press, while `ABORT_SECONDS` lasts, press **VOL+** (Volume-Up). The device
 vibrates when it enters the abort window. Once the window passes without a cancel, the wipe
 begins and **cannot be stopped**.
 
@@ -146,7 +155,11 @@ su -c 'rm -rf /data/adb/deadhand'
 
 ## Limitations and responsibility
 
-- Key detection relies on `getevent`; **always** test in simulation on your device.
+- Key detection relies on `getevent`; **always** test in simulation on your device before
+  going live. The daemon reads all input nodes, so it does not depend on guessing which node
+  carries Volume-Down.
+- Screen-off deep sleep can delay a userspace daemon; validating the gesture in DRY_RUN on
+  your own device (including with the screen off) is the way to confirm it behaves there.
 - BCB writing and crypto-shred vary by manufacturer/ROM. Crypto-shred already makes the data
   unrecoverable even if the recovery factory reset fails.
 - There is no warranty of any kind (see LICENSE). Use is **at your own risk**. The author is
@@ -159,5 +172,6 @@ su -c 'rm -rf /data/adb/deadhand'
 ## Credits
 
 Fork of **abootloop** by [nedorazrab0](https://github.com/Magisk-Modules-Alt-Repo/abootloop),
-under the MIT license. The `getevent` key-detection scaffold comes from there; the 4x Power
-trigger, the crypto-shred, the factory reset and the safety rails belong to this fork.
+under the MIT license. The `getevent` key-detection scaffold comes from there; the 4x
+Volume-Down trigger, the crypto-shred, the factory reset and the safety rails belong to this
+fork.

@@ -5,6 +5,10 @@
 # #  data IRREVERSIBLY. Do not call do_wipe/crypto_shred by hand unless     #
 # #  you understand exactly what they do.                                   #
 # ##########################################################################
+#
+# Trigger: KEY_VOLUMEDOWN pressed 4x rapidly.  Abort: KEY_VOLUMEUP.
+# (Volume is used instead of Power because on Android 12+ rapid Power presses
+#  are grabbed by the OS Emergency SOS feature; see the README.)
 
 STATE=/data/adb/deadhand
 CONFIG="${STATE}/config"
@@ -36,13 +40,15 @@ ensure_state() {
 # #  CATASTROPHIC WIPE MODULE. Read the README before touching this.       #
 # ##########################################################################
 #
-# ARMED : 0 = disarmed (the 4x Power does NOTHING). 1 = armed.
+# Trigger: Volume-Down (VOL-) pressed 4x rapidly.  Cancel: Volume-Up (VOL+).
+#
+# ARMED : 0 = disarmed (the 4x VOL- does NOTHING). 1 = armed.
 #         Prefer arming/disarming from the manager Action button (Magisk/KSU).
 # DRY_RUN : 1 = simulate (only vibrates and logs "WOULD WIPE NOW"; no wipe).
-#           0 = LIVE MODE. The 4x Power WIPES the device.
+#           0 = LIVE MODE. The 4x VOL- WIPES the device.
 # WINDOW_MS : total window for the 4 presses, in milliseconds.
 # DEBOUNCE_MS : ignore presses closer together than this (button bounce guard).
-# ABORT_SECONDS : window to CANCEL with VOL+ or VOL- after the 4th press.
+# ABORT_SECONDS : window to CANCEL with VOL+ after the 4th press.
 #                 0 disables cancellation (not recommended).
 # WIPE_REASON : label written into the recovery command (trace in the wipe log).
 #
@@ -84,11 +90,12 @@ now_ms() {
 # Key detection
 # ---------------------------------------------------------------------------
 
-# Find the /dev/input/eventN nodes that advertise KEY_POWER.
-get_pow_nodes() {
+# List the /dev/input/eventN nodes that advertise KEY_VOLUMEDOWN (diagnostic;
+# the daemon reads ALL nodes, this is only logged at startup).
+list_voldown_nodes() {
   getevent -lp 2>/dev/null | awk '
-    /add device [0-9]+:/ { path=$4 }
-    /KEY_POWER/ && path   { print path; path="" }
+    /add device [0-9]+:/    { path=$4 }
+    /KEY_VOLUMEDOWN/ && path { print path; path="" }
   '
 }
 
@@ -100,15 +107,15 @@ vibrate() {
   echo 1       > /sys/class/leds/vibrator/activate 2>/dev/null
 }
 
-# Cancellation window. Returns 0 if the user cancelled (VOL+/VOL-),
+# Cancellation window. Returns 0 if the user cancelled (VOL+),
 # 1 if the countdown ended without cancellation (proceed to the wipe).
 abort_wait() {
   s="${ABORT_SECONDS:-5}"
   case "${s}" in ""|*[!0-9]*) s=0;; esac
   [ "${s}" -gt 0 ] || return 1
-  log "abort window: ${s}s (VOL+ or VOL- cancels)"
+  log "abort window: ${s}s (press VOL+ to cancel)"
   vibrate 400
-  if timeout "${s}" getevent -lq 2>/dev/null | grep -m1 -qE 'KEY_VOLUME(UP|DOWN).*DOWN'; then
+  if timeout "${s}" getevent -lq 2>/dev/null | grep -m1 -qE 'KEY_VOLUMEUP.*DOWN'; then
     return 0
   fi
   return 1
@@ -206,15 +213,15 @@ do_wipe() {
   fi
 }
 
-# Called when the 4x Power is detected within the window.
+# Called when the 4x VOL- is detected within the window.
 trigger_sequence() {
   # Read fresh ARMED/DRY_RUN/ABORT_SECONDS from disk (they take effect live).
   . "${CONFIG}" 2>/dev/null
   if [ "${ARMED}" != "1" ]; then
-    log "4x Power pattern seen, but DISARMED - ignored"
+    log "4x VOL- pattern seen, but DISARMED - ignored"
     return 0
   fi
-  log "TRIGGER: 4x Power detected (armed)"
+  log "TRIGGER: 4x VOL- detected (armed)"
   vibrate 300
   if [ "${DRY_RUN}" = "1" ]; then
     log "DRY_RUN=1 -> WOULD WIPE NOW (no action taken)"
@@ -243,15 +250,17 @@ run_daemon() {
     return 0
   fi
   echo $$ > "${PIDFILE}"
-  log "daemon started (pid $$)"
+  log "daemon started (pid $$); VOL- nodes: $(list_voldown_nodes | tr '\n' ' ')"
 
   while : ; do
-    node=$(get_pow_nodes | head -n1)   # empty = monitor all nodes
-    # Continuous event stream. The while body runs in the same subshell, so
-    # t1..t4 and prev persist across events.
-    getevent -lq ${node} 2>/dev/null | while read -r line; do
+    # Read ALL input devices and filter for KEY_VOLUMEDOWN. Reading every node
+    # (instead of guessing one) avoids the wrong-node trap: KEY_VOLUMEDOWN is
+    # advertised by several devices. Non-matching events (e.g. touch) cost only
+    # a case test and never fork, so this stays cheap. The while body runs in
+    # the same subshell, so t1..t4 and prev persist across events.
+    getevent -lq 2>/dev/null | while IFS= read -r line; do
       case "${line}" in
-        *KEY_POWER*DOWN*) : ;;
+        *KEY_VOLUMEDOWN*DOWN*) : ;;
         *) continue ;;
       esac
       : "${t1:=0}" "${t2:=0}" "${t3:=0}" "${t4:=0}" "${prev:=0}"
