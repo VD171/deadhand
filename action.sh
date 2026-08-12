@@ -8,31 +8,30 @@ ensure_state
 
 echo "==================================================="
 echo "  deadhand - CATASTROPHIC, IRREVERSIBLE WIPE"
-echo "  Trigger: Volume-Down (VOL-) 4x rapidly"
+echo "  Trigger: HOLD VOL- + VOL+ together for ${HOLD_SECONDS:-5}s"
 echo "==================================================="
 
 if [ "${ARMED}" = "1" ]; then
   set_cfg ARMED 0
   log "DISARMED via Action"
   echo "  Previous state: ARMED"
-  echo "  >> Now: DISARMED. The 4x VOL- does nothing."
+  echo "  >> Now: DISARMED. Holding the combo does nothing."
 else
   set_cfg ARMED 1
   log "ARMED via Action (DRY_RUN=${DRY_RUN})"
   echo "  Previous state: disarmed"
   echo "  >> Now: ARMED."
   if [ "${DRY_RUN}" = "1" ]; then
-    echo "  SIMULATION MODE (DRY_RUN=1): 4x VOL- only writes to the log,"
+    echo "  SIMULATION MODE (DRY_RUN=1): the combo only writes to the log,"
     echo "  it does NOT wipe. Edit ${CONFIG} and set DRY_RUN=0 for live mode."
   else
-    echo "  [!] LIVE MODE (DRY_RUN=0): 4x VOL- WILL WIPE the device."
-    echo "  [!] Abort window: ${ABORT_SECONDS}s (press VOL+)."
+    echo "  [!] LIVE MODE (DRY_RUN=0): holding VOL- + VOL+ for ${HOLD_SECONDS:-5}s"
+    echo "  [!] WILL WIPE the device. Release either key to cancel."
   fi
 fi
 
 echo "---------------------------------------------------"
-echo "  Config: WINDOW_MS=${WINDOW_MS}  DEBOUNCE_MS=${DEBOUNCE_MS}"
-echo "          ABORT_SECONDS=${ABORT_SECONDS}  DRY_RUN=${DRY_RUN}"
+echo "  Config: HOLD_SECONDS=${HOLD_SECONDS}  DRY_RUN=${DRY_RUN}"
 echo "  File: ${CONFIG}"
 echo "---------------------------------------------------"
 echo "  Last log lines (${LOG}):"
